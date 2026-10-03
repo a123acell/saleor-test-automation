@@ -12,7 +12,7 @@
 
 | 层次 | 规模 | 技术 | 说明 |
 | --- | --- | --- | --- |
-| 接口自动化 | **73 条**（含 14 条数据驱动） | pytest + requests | GraphQL 接口：鉴权 / 商品 / 购物车 / 结算 / 订单 / 账户 / 安全 |
+| 接口自动化 | **81 条**（含 14 条数据驱动） | pytest + requests | GraphQL 接口：鉴权 / 商品 / 购物车 / 结算 / 订单 / 账户 / 安全 / 分页边界 |
 | UI 自动化 | **22 条**（冒烟 7 条） | Playwright + POM | Saleor Dashboard：登录鉴权 / 导航 / 商品 / 订单 / 设置 / 增删 |
 | 性能压测 | 梯度 5→10→20→50 并发 | JMeter 5.6.3 | 只读查询 + 结算写链路，双层清理保证零残留 |
 | 工程自检 | **18 项** | 自研脚本 | 编号唯一、口径一致、依赖声明、JMeter 计划自洽、CI 编排同步 |
@@ -40,7 +40,7 @@
 ├── schema/                  # GraphQL schema（SDL）+ 规模统计
 ├── apifox/                  # 可导入 Apifox 的接口集合 + 导入说明
 ├── scripts/                 # schema 拉取 / 清单生成 / 集合校验 / 工程自检
-├── docs/                    # 接口清单 / 核心链路 / UI 用例清单 / 性能报告 / CI 说明
+├── docs/                    # 接口清单 / 核心链路 / UI 用例清单 / 性能报告 / 查询性能分析 / CI 说明
 ├── pytest.ini
 ├── requirements.txt
 └── .env.example
@@ -105,6 +105,12 @@ JMeter 计划自洽（GraphQL 语法与根字段存在性）、CI 编排与执�
 Jenkinsfile 只负责编排，具体命令统一走 `ci/pipeline.py`；本地 `python ci/pipeline.py all`
 即可复现整条流水线，杜绝「改了脚本忘了改编排」的静默漂移。
 
+**7. 边界断言与性能结论全部实测驱动，不凭文档推断**
+分页边界（`first` 上限 100、`first=0`、非法 cursor）与越权 mutation 的断言目标，
+均先用探针在真实实例上验证行为再固化为用例；对「列表接口是否存在 N+1」不靠猜，
+用 Postgres SQL 日志实测单请求 SELECT 次数（页大小 5→100 查询次数恒定），
+验证 DataLoader 批量加载效果，方法与数据见 [`docs/查询性能分析.md`](docs/查询性能分析.md)。
+
 ---
 
 ## 五、文档索引
@@ -115,6 +121,7 @@ Jenkinsfile 只负责编排，具体命令统一走 `ci/pipeline.py`；本地 `p
 | [`docs/核心业务链路.md`](docs/核心业务链路.md) | 11 个接口的完整下单链路 + 14 条踩坑记录（错误码口径） |
 | [`docs/UI用例清单.md`](docs/UI用例清单.md) | 22 条 Dashboard 用例清单 |
 | [`docs/性能测试报告.md`](docs/性能测试报告.md) | 梯度压测结果、瓶颈分析与容量结论 |
+| [`docs/查询性能分析.md`](docs/查询性能分析.md) | N+1 实测：单请求 SELECT 次数测量方法与 DataLoader 验证结论 |
 | [`docs/CI持续集成.md`](docs/CI持续集成.md) | Jenkins 流水线设计、本地演练、插件与变量配置 |
 | [`perftests/README.md`](perftests/README.md) | JMeter 计划参数、场景设计与复现命令 |
 | [`apifox/导入说明.md`](apifox/导入说明.md) | 19 个请求的 Apifox 集合导入与联调步骤 |
