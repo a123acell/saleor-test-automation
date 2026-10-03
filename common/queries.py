@@ -81,6 +81,16 @@ query Products($channel: String!, $first: Int!) {
 }
 """
 
+PRODUCTS_PAGINATED = """
+query ProductsPaginated($channel: String!, $first: Int!, $after: String) {
+  products(first: $first, after: $after, channel: $channel) {
+    totalCount
+    pageInfo { endCursor hasNextPage }
+    edges { cursor node { id } }
+  }
+}
+"""
+
 PRODUCT_BY_ID = """
 query ProductById($id: ID!, $channel: String!) {
   product(id: $id, channel: $channel) {
