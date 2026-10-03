@@ -1,0 +1,12 @@
+{
+  "endpoint": "http://localhost:8000/graphql/",
+  "query_type": "Query",
+  "mutation_type": "Mutation",
+  "query_field_count": 90,
+  "mutation_field_count": 339,
+  "type_count": 1475,
+  "object_types": 905,
+  "enum_types": 209,
+  "input_types": 318,
+  "scalar_types": 21
+}

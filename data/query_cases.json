@@ -1,0 +1,82 @@
+[
+  {
+    "id": "DD-Q-001",
+    "name": "查询店铺信息（需鉴权）",
+    "query": "SHOP",
+    "operation": "shop",
+    "auth": true,
+    "variables": {},
+    "expect_data_key": "shop",
+    "expect_not_null": ["shop.name", "shop.version", "shop.defaultCountry.code"]
+  },
+  {
+    "id": "DD-Q-002",
+    "name": "查询渠道列表（本环境需鉴权）",
+    "query": "CHANNELS",
+    "operation": "channels",
+    "auth": true,
+    "variables": {},
+    "expect_data_key": "channels",
+    "expect_not_null": ["channels"]
+  },
+  {
+    "id": "DD-Q-003",
+    "name": "按渠道查询商品列表",
+    "query": "PRODUCTS",
+    "operation": "products",
+    "auth": true,
+    "variables": { "channel": "$CHANNEL", "first": 5 },
+    "expect_data_key": "products",
+    "expect_not_null": ["products.totalCount", "products.edges"]
+  },
+  {
+    "id": "DD-Q-004",
+    "name": "查询商品变体列表",
+    "query": "PRODUCT_VARIANTS",
+    "operation": "productVariants",
+    "auth": true,
+    "variables": { "channel": "$CHANNEL", "first": 5 },
+    "expect_data_key": "productVariants",
+    "expect_not_null": ["productVariants.totalCount"]
+  },
+  {
+    "id": "DD-Q-005",
+    "name": "查询分类列表",
+    "query": "CATEGORIES",
+    "operation": "categories",
+    "auth": true,
+    "variables": { "first": 5 },
+    "expect_data_key": "categories",
+    "expect_not_null": ["categories.totalCount"]
+  },
+  {
+    "id": "DD-Q-006",
+    "name": "查询订单列表（需鉴权）",
+    "query": "ORDERS",
+    "operation": "orders",
+    "auth": true,
+    "variables": { "first": 5 },
+    "expect_data_key": "orders",
+    "expect_not_null": ["orders.totalCount"]
+  },
+  {
+    "id": "DD-Q-007",
+    "name": "查询客户列表（需鉴权）",
+    "query": "CUSTOMERS",
+    "operation": "customers",
+    "auth": true,
+    "variables": { "first": 5 },
+    "expect_data_key": "customers",
+    "expect_not_null": ["customers.totalCount"]
+  },
+  {
+    "id": "DD-Q-008",
+    "name": "查询当前登录用户",
+    "query": "ME",
+    "operation": "me",
+    "auth": true,
+    "variables": {},
+    "expect_data_key": "me",
+    "expect_not_null": ["me.email", "me.id"]
+  }
+]

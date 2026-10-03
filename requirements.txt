@@ -1,0 +1,8 @@
+pytest==9.1.1
+requests==2.33.1
+allure-pytest==2.16.0
+python-dotenv==1.2.2
+# schema 工具链：scripts/fetch_schema.py 生成 SDL 时使用
+graphql-core==3.3.0
+# UI 自动化：uitests/ 下 Dashboard 用例使用
+playwright==1.62.0

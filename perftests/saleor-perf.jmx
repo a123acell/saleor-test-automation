@@ -1,0 +1,770 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.3">
+  <hashTree>
+    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="Saleor 接口性能压测" enabled="true">
+      <stringProp name="TestPlan.comments">Saleor GraphQL 接口性能压测。
+
+场景A 商品列表查询（只读，匿名，模拟游客浏览）。
+场景B 结算写链路（checkoutCreate → 收货地址 → 账单地址 → 取配送方式 → 选配送 → 取应付金额 → 创建支付 → checkoutDelete 回收）。
+链路带管理员 Token：实测 checkoutDelete 需要 MANAGE_CHECKOUTS 权限，匿名调用会被拒（PermissionDenied），
+因此 setUp 阶段用 tokenCreate 登录一次，把 Token 写入全局属性供场景B 的鉴权头引用（tokenCreate 只调一次，不受登录限流影响）。
+每轮自行回收 checkout，不留购物车与订单残留（Saleor 无 orderDelete，故压测不调用 checkoutComplete）。</stringProp>
+      <boolProp name="TestPlan.functional_mode">false</boolProp>
+      <boolProp name="TestPlan.serialize_threadgroups">true</boolProp>
+      <boolProp name="TestPlan.tearDown_on_shutdown">true</boolProp>
+      <elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments" testname="User Defined Variables" enabled="true">
+        <collectionProp name="Arguments.arguments">
+          <elementProp name="HOST" elementType="Argument">
+            <stringProp name="Argument.name">HOST</stringProp>
+            <stringProp name="Argument.value">${__P(host,localhost)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="PORT" elementType="Argument">
+            <stringProp name="Argument.name">PORT</stringProp>
+            <stringProp name="Argument.value">${__P(port,8000)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="PROTOCOL" elementType="Argument">
+            <stringProp name="Argument.name">PROTOCOL</stringProp>
+            <stringProp name="Argument.value">${__P(protocol,http)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="CHANNEL" elementType="Argument">
+            <stringProp name="Argument.name">CHANNEL</stringProp>
+            <stringProp name="Argument.value">${__P(channel,default-channel)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="PAGE_SIZE" elementType="Argument">
+            <stringProp name="Argument.name">PAGE_SIZE</stringProp>
+            <stringProp name="Argument.value">${__P(page_size,20)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="RUN_ID" elementType="Argument">
+            <stringProp name="Argument.name">RUN_ID</stringProp>
+            <stringProp name="Argument.value">${__time(yyyyMMddHHmmss)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="VARIANT_ID" elementType="Argument">
+            <stringProp name="Argument.name">VARIANT_ID</stringProp>
+            <stringProp name="Argument.value">UNSET</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+        </collectionProp>
+      </elementProp>
+    </TestPlan>
+    <hashTree>
+      <ConfigTestElement guiclass="HttpDefaultsGui" testclass="ConfigTestElement" testname="HTTP 请求默认值" enabled="true">
+        <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="User Defined Variables" enabled="true">
+          <collectionProp name="Arguments.arguments"/>
+        </elementProp>
+        <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+        <stringProp name="HTTPSampler.port">${PORT}</stringProp>
+        <stringProp name="HTTPSampler.protocol">${PROTOCOL}</stringProp>
+        <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+        <stringProp name="HTTPSampler.connect_timeout">5000</stringProp>
+        <stringProp name="HTTPSampler.response_timeout">30000</stringProp>
+      </ConfigTestElement>
+      <hashTree/>
+      <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="HTTP 信息头管理器" enabled="true">
+        <collectionProp name="HeaderManager.headers">
+          <elementProp name="" elementType="Header">
+            <stringProp name="Header.name">Content-Type</stringProp>
+            <stringProp name="Header.value">application/json</stringProp>
+          </elementProp>
+          <elementProp name="" elementType="Header">
+            <stringProp name="Header.name">Accept</stringProp>
+            <stringProp name="Header.value">application/json</stringProp>
+          </elementProp>
+        </collectionProp>
+      </HeaderManager>
+      <hashTree/>
+      <SetupThreadGroup guiclass="SetupThreadGroupGui" testclass="SetupThreadGroup" testname="setUp 解析压测用变体" enabled="true">
+        <stringProp name="ThreadGroup.on_sample_error">stopthread</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller" enabled="true">
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+          <stringProp name="LoopController.loops">1</stringProp>
+        </elementProp>
+        <stringProp name="ThreadGroup.num_threads">1</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
+        <boolProp name="ThreadGroup.scheduler">false</boolProp>
+        <stringProp name="ThreadGroup.duration"></stringProp>
+        <stringProp name="ThreadGroup.delay"></stringProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+      </SetupThreadGroup>
+      <hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="SETUP 取可用变体" enabled="true">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;query&quot;:&quot;query Products($channel: String!, $first: Int!) { products(first: $first, channel: $channel) { totalCount edges { node { id name variants { id sku pricing { price { gross { amount currency } } } } } } } }&quot;,&quot;variables&quot;:{&quot;channel&quot;:&quot;${CHANNEL}&quot;,&quot;first&quot;:20}}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.path">/graphql/</stringProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+          <stringProp name="HTTPSampler.embedded_url_re"></stringProp>
+          <stringProp name="HTTPSampler.connect_timeout"></stringProp>
+          <stringProp name="HTTPSampler.response_timeout"></stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor" testname="提取首个有定价的变体 id" enabled="true">
+            <stringProp name="JSONPostProcessor.referenceNames">VARIANT_ID</stringProp>
+            <stringProp name="JSONPostProcessor.jsonPathExprs">$.data.products.edges[*].node.variants[?(@.pricing.price.gross.amount != null)].id</stringProp>
+            <stringProp name="JSONPostProcessor.match_numbers">1</stringProp>
+            <stringProp name="JSONPostProcessor.defaultValues">NOT_FOUND</stringProp>
+          </JSONPostProcessor>
+          <hashTree/>
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言 setUp 解析成功" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="script">def body = prev.getResponseDataAsString()
+def json = new groovy.json.JsonSlurper().parseText(body)
+if (json.errors) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('商品查询返回 GraphQL 顶层错误: ' + json.errors)
+    return
+}
+def products = json.data == null ? null : json.data.products
+if (products == null) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('商品查询未返回 products 节点: ' + body.take(300))
+    return
+}
+def edges = products.edges
+if (edges == null || edges.size() == 0) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('商品列表为空，无法解析变体')
+    return
+}
+def vid = vars.get('VARIANT_ID')
+if (vid == null || vid == 'NOT_FOUND' || vid.isEmpty()) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('未能解析出有定价的变体 id（VARIANT_ID=' + vid + '）')
+    return
+}
+// setUp 线程组的 vars 是线程私有变量，后续线程组读不到；
+// 必须写入 props（全局属性）才能跨线程组共享。
+props.put('VARIANT_ID', vid)
+</stringProp>
+          </JSR223Assertion>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="SETUP 登录取 Token" enabled="true">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;query&quot;:&quot;mutation TokenCreate($email: String!, $password: String!) { tokenCreate(email: $email, password: $password) { token errors { field message code } } }&quot;,&quot;variables&quot;:{&quot;email&quot;:&quot;${__P(admin_email,admin@example.com)}&quot;,&quot;password&quot;:&quot;${__P(admin_password,admin)}&quot;}}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.path">/graphql/</stringProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+          <stringProp name="HTTPSampler.embedded_url_re"></stringProp>
+          <stringProp name="HTTPSampler.connect_timeout"></stringProp>
+          <stringProp name="HTTPSampler.response_timeout"></stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor" testname="提取登录 Token" enabled="true">
+            <stringProp name="JSONPostProcessor.referenceNames">AUTH_TOKEN</stringProp>
+            <stringProp name="JSONPostProcessor.jsonPathExprs">$.data.tokenCreate.token</stringProp>
+            <stringProp name="JSONPostProcessor.match_numbers">1</stringProp>
+            <stringProp name="JSONPostProcessor.defaultValues">NOT_FOUND</stringProp>
+          </JSONPostProcessor>
+          <hashTree/>
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言登录取到 Token" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="script">def body = prev.getResponseDataAsString()
+def json = new groovy.json.JsonSlurper().parseText(body)
+if (json.errors) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('登录返回 GraphQL 顶层错误: ' + json.errors)
+    return
+}
+def node = json.data == null ? null : json.data.tokenCreate
+if (node == null) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('tokenCreate 节点为空: ' + body.take(300))
+    return
+}
+if (node.errors) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('登录失败（检查 admin_email / admin_password）: ' + node.errors)
+    return
+}
+def tok = vars.get('AUTH_TOKEN')
+if (tok == null || tok == 'NOT_FOUND' || tok.isEmpty()) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('未解析到 Token')
+    return
+}
+// 跨线程组共享：场景B 的鉴权头通过 ${__P(AUTH_TOKEN)} 读取
+props.put('AUTH_TOKEN', tok)
+</stringProp>
+          </JSR223Assertion>
+          <hashTree/>
+        </hashTree>
+      </hashTree>
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="场景A 商品列表查询" enabled="true">
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller" enabled="true">
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+          <stringProp name="LoopController.loops">-1</stringProp>
+        </elementProp>
+        <stringProp name="ThreadGroup.num_threads">${__P(threads,5)}</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">${__P(rampup,5)}</stringProp>
+        <boolProp name="ThreadGroup.scheduler">true</boolProp>
+        <stringProp name="ThreadGroup.duration">${__P(duration,60)}</stringProp>
+        <stringProp name="ThreadGroup.delay"></stringProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+      </ThreadGroup>
+      <hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="PRODUCTS 商品列表查询" enabled="true">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;query&quot;:&quot;query Products($channel: String!, $first: Int!) { products(first: $first, channel: $channel) { totalCount edges { node { id name slug variants { id sku pricing { price { gross { amount currency } } } } } } } }&quot;,&quot;variables&quot;:{&quot;channel&quot;:&quot;${CHANNEL}&quot;,&quot;first&quot;:${PAGE_SIZE}}}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.path">/graphql/</stringProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+          <stringProp name="HTTPSampler.embedded_url_re"></stringProp>
+          <stringProp name="HTTPSampler.connect_timeout"></stringProp>
+          <stringProp name="HTTPSampler.response_timeout"></stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言商品列表查询" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="script">def body = prev.getResponseDataAsString()
+def json = new groovy.json.JsonSlurper().parseText(body)
+if (json.errors) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('商品查询返回 GraphQL 顶层错误: ' + json.errors)
+    return
+}
+def products = json.data == null ? null : json.data.products
+if (products == null) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('商品查询未返回 products 节点: ' + body.take(300))
+    return
+}
+def edges = products.edges
+if (edges == null || edges.size() == 0) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('商品列表为空')
+}
+</stringProp>
+          </JSR223Assertion>
+          <hashTree/>
+        </hashTree>
+      </hashTree>
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="场景B 结算写链路（含回收）" enabled="true">
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller" enabled="true">
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+          <stringProp name="LoopController.loops">-1</stringProp>
+        </elementProp>
+        <stringProp name="ThreadGroup.num_threads">${__P(threads,5)}</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">${__P(rampup,5)}</stringProp>
+        <boolProp name="ThreadGroup.scheduler">true</boolProp>
+        <stringProp name="ThreadGroup.duration">${__P(duration,60)}</stringProp>
+        <stringProp name="ThreadGroup.delay"></stringProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+      </ThreadGroup>
+      <hashTree>
+        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="场景B 鉴权头" enabled="true">
+          <collectionProp name="HeaderManager.headers">
+            <elementProp name="" elementType="Header">
+              <stringProp name="Header.name">Authorization</stringProp>
+              <stringProp name="Header.value">Bearer ${__P(AUTH_TOKEN,)}</stringProp>
+            </elementProp>
+          </collectionProp>
+        </HeaderManager>
+        <hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="CHECKOUT_CREATE 创建购物车" enabled="true">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;query&quot;:&quot;mutation CheckoutCreate($input: CheckoutCreateInput!) { checkoutCreate(input: $input) { checkout { id token email totalPrice { gross { amount currency } } lines { id quantity } } errors { field message code } } }&quot;,&quot;variables&quot;:{&quot;input&quot;:{&quot;channel&quot;:&quot;${CHANNEL}&quot;,&quot;email&quot;:&quot;perf-${RUN_ID}-${__threadNum}@example.com&quot;,&quot;lines&quot;:[{&quot;quantity&quot;:1,&quot;variantId&quot;:&quot;${__P(VARIANT_ID,UNSET)}&quot;}]}}}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.path">/graphql/</stringProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+          <stringProp name="HTTPSampler.embedded_url_re"></stringProp>
+          <stringProp name="HTTPSampler.connect_timeout"></stringProp>
+          <stringProp name="HTTPSampler.response_timeout"></stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor" testname="提取 checkout id" enabled="true">
+            <stringProp name="JSONPostProcessor.referenceNames">CK_ID</stringProp>
+            <stringProp name="JSONPostProcessor.jsonPathExprs">$.data.checkoutCreate.checkout.id</stringProp>
+            <stringProp name="JSONPostProcessor.match_numbers">1</stringProp>
+            <stringProp name="JSONPostProcessor.defaultValues">NOT_FOUND</stringProp>
+          </JSONPostProcessor>
+          <hashTree/>
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言创建购物车" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="script">def body = prev.getResponseDataAsString()
+def json = new groovy.json.JsonSlurper().parseText(body)
+if (json.errors) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('GraphQL 顶层错误: ' + json.errors)
+    return
+}
+def node = json.data == null ? null : json.data.checkoutCreate
+if (node == null) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('checkoutCreate 节点为空: ' + body.take(300))
+    return
+}
+if (node.errors) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('checkoutCreate 业务错误: ' + node.errors)
+    return
+}
+def cid = vars.get('CK_ID')
+if (cid == null || cid == 'NOT_FOUND' || cid.isEmpty()) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('未解析到 checkout id')
+}
+</stringProp>
+          </JSR223Assertion>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="SHIPPING_ADDRESS 填收货地址" enabled="true">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;query&quot;:&quot;mutation CheckoutShippingAddressUpdate($id: ID!, $shippingAddress: AddressInput!) { checkoutShippingAddressUpdate(id: $id, shippingAddress: $shippingAddress) { checkout { id shippingAddress { firstName lastName city postalCode country { code } } } errors { field message code } } }&quot;,&quot;variables&quot;:{&quot;id&quot;:&quot;${CK_ID}&quot;,&quot;shippingAddress&quot;:{&quot;firstName&quot;:&quot;San&quot;,&quot;lastName&quot;:&quot;Zhang&quot;,&quot;streetAddress1&quot;:&quot;123 Test Road&quot;,&quot;city&quot;:&quot;New York&quot;,&quot;postalCode&quot;:&quot;10001&quot;,&quot;country&quot;:&quot;US&quot;,&quot;countryArea&quot;:&quot;NY&quot;,&quot;phone&quot;:&quot;+12125550000&quot;}}}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.path">/graphql/</stringProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+          <stringProp name="HTTPSampler.embedded_url_re"></stringProp>
+          <stringProp name="HTTPSampler.connect_timeout"></stringProp>
+          <stringProp name="HTTPSampler.response_timeout"></stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言填收货地址" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="script">def body = prev.getResponseDataAsString()
+def json = new groovy.json.JsonSlurper().parseText(body)
+if (json.errors) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('GraphQL 顶层错误: ' + json.errors)
+    return
+}
+def node = json.data == null ? null : json.data.checkoutShippingAddressUpdate
+if (node == null) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('checkoutShippingAddressUpdate 节点为空: ' + body.take(300))
+    return
+}
+if (node.errors) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('checkoutShippingAddressUpdate 业务错误: ' + node.errors)
+}
+</stringProp>
+          </JSR223Assertion>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="BILLING_ADDRESS 填账单地址" enabled="true">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;query&quot;:&quot;mutation CheckoutBillingAddressUpdate($id: ID!, $billingAddress: AddressInput!) { checkoutBillingAddressUpdate(id: $id, billingAddress: $billingAddress) { checkout { id billingAddress { firstName lastName city postalCode country { code } } } errors { field message code } } }&quot;,&quot;variables&quot;:{&quot;id&quot;:&quot;${CK_ID}&quot;,&quot;billingAddress&quot;:{&quot;firstName&quot;:&quot;San&quot;,&quot;lastName&quot;:&quot;Zhang&quot;,&quot;streetAddress1&quot;:&quot;123 Test Road&quot;,&quot;city&quot;:&quot;New York&quot;,&quot;postalCode&quot;:&quot;10001&quot;,&quot;country&quot;:&quot;US&quot;,&quot;countryArea&quot;:&quot;NY&quot;,&quot;phone&quot;:&quot;+12125550000&quot;}}}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.path">/graphql/</stringProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+          <stringProp name="HTTPSampler.embedded_url_re"></stringProp>
+          <stringProp name="HTTPSampler.connect_timeout"></stringProp>
+          <stringProp name="HTTPSampler.response_timeout"></stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言填账单地址" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="script">def body = prev.getResponseDataAsString()
+def json = new groovy.json.JsonSlurper().parseText(body)
+if (json.errors) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('GraphQL 顶层错误: ' + json.errors)
+    return
+}
+def node = json.data == null ? null : json.data.checkoutBillingAddressUpdate
+if (node == null) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('checkoutBillingAddressUpdate 节点为空: ' + body.take(300))
+    return
+}
+if (node.errors) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('checkoutBillingAddressUpdate 业务错误: ' + node.errors)
+}
+</stringProp>
+          </JSR223Assertion>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="CHECKOUT_QUERY 取配送方式" enabled="true">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;query&quot;:&quot;query Checkout($id: ID!) { checkout(id: $id) { id totalPrice { gross { amount currency } } availableShippingMethods { id name price { amount currency } } } }&quot;,&quot;variables&quot;:{&quot;id&quot;:&quot;${CK_ID}&quot;}}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.path">/graphql/</stringProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+          <stringProp name="HTTPSampler.embedded_url_re"></stringProp>
+          <stringProp name="HTTPSampler.connect_timeout"></stringProp>
+          <stringProp name="HTTPSampler.response_timeout"></stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor" testname="提取配送方式 id" enabled="true">
+            <stringProp name="JSONPostProcessor.referenceNames">SHIP_METHOD_ID</stringProp>
+            <stringProp name="JSONPostProcessor.jsonPathExprs">$.data.checkout.availableShippingMethods[0].id</stringProp>
+            <stringProp name="JSONPostProcessor.match_numbers">1</stringProp>
+            <stringProp name="JSONPostProcessor.defaultValues">NOT_FOUND</stringProp>
+          </JSONPostProcessor>
+          <hashTree/>
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言取配送方式" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="script">def body = prev.getResponseDataAsString()
+def json = new groovy.json.JsonSlurper().parseText(body)
+if (json.errors) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('GraphQL 顶层错误: ' + json.errors)
+    return
+}
+def ck = json.data == null ? null : json.data.checkout
+if (ck == null) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('checkout 节点为空: ' + body.take(300))
+    return
+}
+def methods = ck.availableShippingMethods
+if (methods == null || methods.size() == 0) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('无可用配送方式（检查仓库配送区域配置）')
+}
+</stringProp>
+          </JSR223Assertion>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="DELIVERY_METHOD 选配送方式" enabled="true">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;query&quot;:&quot;mutation CheckoutDeliveryMethodUpdate($id: ID!, $deliveryMethodId: ID!) { checkoutDeliveryMethodUpdate(id: $id, deliveryMethodId: $deliveryMethodId) { checkout { id shippingMethod { id name } totalPrice { gross { amount currency } } } errors { field message code } } }&quot;,&quot;variables&quot;:{&quot;id&quot;:&quot;${CK_ID}&quot;,&quot;deliveryMethodId&quot;:&quot;${SHIP_METHOD_ID}&quot;}}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.path">/graphql/</stringProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+          <stringProp name="HTTPSampler.embedded_url_re"></stringProp>
+          <stringProp name="HTTPSampler.connect_timeout"></stringProp>
+          <stringProp name="HTTPSampler.response_timeout"></stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言选配送方式" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="script">def body = prev.getResponseDataAsString()
+def json = new groovy.json.JsonSlurper().parseText(body)
+if (json.errors) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('GraphQL 顶层错误: ' + json.errors)
+    return
+}
+def node = json.data == null ? null : json.data.checkoutDeliveryMethodUpdate
+if (node == null) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('checkoutDeliveryMethodUpdate 节点为空: ' + body.take(300))
+    return
+}
+if (node.errors) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('checkoutDeliveryMethodUpdate 业务错误: ' + node.errors)
+}
+</stringProp>
+          </JSR223Assertion>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="CHECKOUT_QUERY 取应付金额" enabled="true">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;query&quot;:&quot;query Checkout($id: ID!) { checkout(id: $id) { id totalPrice { gross { amount currency } } } }&quot;,&quot;variables&quot;:{&quot;id&quot;:&quot;${CK_ID}&quot;}}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.path">/graphql/</stringProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+          <stringProp name="HTTPSampler.embedded_url_re"></stringProp>
+          <stringProp name="HTTPSampler.connect_timeout"></stringProp>
+          <stringProp name="HTTPSampler.response_timeout"></stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor" testname="提取应付金额" enabled="true">
+            <stringProp name="JSONPostProcessor.referenceNames">TOTAL_AMOUNT</stringProp>
+            <stringProp name="JSONPostProcessor.jsonPathExprs">$.data.checkout.totalPrice.gross.amount</stringProp>
+            <stringProp name="JSONPostProcessor.match_numbers">1</stringProp>
+            <stringProp name="JSONPostProcessor.defaultValues">NOT_FOUND</stringProp>
+          </JSONPostProcessor>
+          <hashTree/>
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言取应付金额" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="script">def body = prev.getResponseDataAsString()
+def json = new groovy.json.JsonSlurper().parseText(body)
+if (json.errors) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('GraphQL 顶层错误: ' + json.errors)
+    return
+}
+def ck = json.data == null ? null : json.data.checkout
+if (ck == null) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('checkout 节点为空: ' + body.take(300))
+    return
+}
+def amount = vars.get('TOTAL_AMOUNT')
+if (amount == null || amount == 'NOT_FOUND' || amount.isEmpty()) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('未解析到应付金额')
+}
+</stringProp>
+          </JSR223Assertion>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="PAYMENT_CREATE 创建支付" enabled="true">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;query&quot;:&quot;mutation CheckoutPaymentCreate($id: ID!, $input: PaymentInput!) { checkoutPaymentCreate(id: $id, input: $input) { payment { id gateway total { amount currency } chargeStatus } errors { field message code } } }&quot;,&quot;variables&quot;:{&quot;id&quot;:&quot;${CK_ID}&quot;,&quot;input&quot;:{&quot;gateway&quot;:&quot;mirumee.payments.dummy&quot;,&quot;amount&quot;:&quot;${TOTAL_AMOUNT}&quot;,&quot;token&quot;:&quot;charged&quot;}}}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.path">/graphql/</stringProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+          <stringProp name="HTTPSampler.embedded_url_re"></stringProp>
+          <stringProp name="HTTPSampler.connect_timeout"></stringProp>
+          <stringProp name="HTTPSampler.response_timeout"></stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言创建支付" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="script">def body = prev.getResponseDataAsString()
+def json = new groovy.json.JsonSlurper().parseText(body)
+if (json.errors) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('GraphQL 顶层错误: ' + json.errors)
+    return
+}
+def node = json.data == null ? null : json.data.checkoutPaymentCreate
+if (node == null) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('checkoutPaymentCreate 节点为空: ' + body.take(300))
+    return
+}
+if (node.errors) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('checkoutPaymentCreate 业务错误: ' + node.errors)
+}
+</stringProp>
+          </JSR223Assertion>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="CHECKOUT_DELETE 回收购物车" enabled="true">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;query&quot;:&quot;mutation CheckoutDelete($id: ID!) { checkoutDelete(id: $id) { errors { field message code } } }&quot;,&quot;variables&quot;:{&quot;id&quot;:&quot;${CK_ID}&quot;}}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.path">/graphql/</stringProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+          <stringProp name="HTTPSampler.embedded_url_re"></stringProp>
+          <stringProp name="HTTPSampler.connect_timeout"></stringProp>
+          <stringProp name="HTTPSampler.response_timeout"></stringProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <JSR223Assertion guiclass="TestBeanGUI" testclass="JSR223Assertion" testname="断言回收购物车" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="script">def body = prev.getResponseDataAsString()
+def json = new groovy.json.JsonSlurper().parseText(body)
+if (json.errors) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('GraphQL 顶层错误: ' + json.errors)
+    return
+}
+def node = json.data == null ? null : json.data.checkoutDelete
+if (node == null) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('checkoutDelete 节点为空: ' + body.take(300))
+    return
+}
+if (node.errors) {
+    AssertionResult.setFailure(true)
+    AssertionResult.setFailureMessage('checkoutDelete 业务错误（购物车可能残留）: ' + node.errors)
+}
+</stringProp>
+          </JSR223Assertion>
+          <hashTree/>
+        </hashTree>
+      </hashTree>
+      <PostThreadGroup guiclass="PostThreadGroupGui" testclass="PostThreadGroup" testname="tearDown 清理压测残留" enabled="true">
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller" enabled="true">
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+          <stringProp name="LoopController.loops">1</stringProp>
+        </elementProp>
+        <stringProp name="ThreadGroup.num_threads">1</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
+        <boolProp name="ThreadGroup.scheduler">false</boolProp>
+        <stringProp name="ThreadGroup.duration"></stringProp>
+        <stringProp name="ThreadGroup.delay"></stringProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+      </PostThreadGroup>
+      <hashTree>
+        <JSR223Sampler guiclass="TestBeanGUI" testclass="JSR223Sampler" testname="清理残留 checkout" enabled="true">
+          <stringProp name="scriptLanguage">groovy</stringProp>
+          <stringProp name="script">import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import org.apache.http.client.methods.HttpPost
+import org.apache.http.entity.StringEntity
+import org.apache.http.impl.client.HttpClients
+import org.apache.http.util.EntityUtils
+
+// 场景B 每轮都会回收自己创建的 checkout，但「持续时间到点」时最后一轮
+// 可能停在创建之后、删除之前，每线程最多残留 1 个。这里统一兜底清理。
+// 注意：实测 checkouts 的 filter.search 不匹配 email，只能取回后按前缀过滤。
+def url = vars.get('PROTOCOL') + '://' + vars.get('HOST') + ':' + vars.get('PORT') + '/graphql/'
+def token = props.get('AUTH_TOKEN')
+def http = HttpClients.createDefault()
+def slurper = new JsonSlurper()
+
+def call = { String q, Map v ->
+    def post = new HttpPost(url)
+    post.setHeader('Content-Type', 'application/json')
+    if (token) { post.setHeader('Authorization', 'Bearer ' + token) }
+    post.setEntity(new StringEntity(JsonOutput.toJson([query: q, variables: v]), 'UTF-8'))
+    def resp = http.execute(post)
+    def ent = resp.getEntity()
+    def text = ent == null ? '' : EntityUtils.toString(ent, 'UTF-8')
+    resp.close()
+    return slurper.parseText(text)
+}
+
+SampleResult.setSuccessful(true)
+def listed = call('query($first: Int!) { checkouts(first: $first) { edges { node { id email } } } }', [first: 100])
+if (listed.errors) {
+    SampleResult.setSuccessful(false)
+    SampleResult.setResponseMessage('tearDown 查询 checkout 失败：' + listed.errors)
+    http.close()
+    return
+}
+def targets = []
+(listed.data?.checkouts?.edges ?: []).each { e ->
+    def email = e.node.email
+    if (email != null &amp;&amp; email.startsWith('perf-')) { targets &lt;&lt; e.node.id }
+}
+def failed = []
+targets.each { cid ->
+    def r = call('mutation($id: ID!) { checkoutDelete(id: $id) { errors { field message code } } }', [id: cid])
+    def errs = r.data?.checkoutDelete?.errors
+    if (r.errors || (errs != null &amp;&amp; !errs.isEmpty())) { failed &lt;&lt; cid }
+}
+http.close()
+if (failed) {
+    SampleResult.setSuccessful(false)
+    SampleResult.setResponseMessage('tearDown 未清理干净的 checkout：' + failed)
+} else {
+    SampleResult.setResponseMessage('已清理压测残留 checkout ' + targets.size() + ' 个')
+    log.info('tearDown 已清理压测残留 checkout ' + targets.size() + ' 个')
+}
+</stringProp>
+        </JSR223Sampler>
+        <hashTree/>
+      </hashTree>
+    </hashTree>
+  </hashTree>
+</jmeterTestPlan>

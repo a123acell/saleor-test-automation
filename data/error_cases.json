@@ -1,0 +1,84 @@
+[
+  {
+    "id": "DD-E-001",
+    "name": "注册缺 redirectUrl（REQUIRED）",
+    "query": "ACCOUNT_REGISTER",
+    "operation": "accountRegister",
+    "auth": false,
+    "variables": {
+      "input": {
+        "email": "$UNIQUE_EMAIL",
+        "password": "Test@12345",
+        "channel": "$CHANNEL"
+      }
+    },
+    "level": "payload",
+    "expect_error_code": "REQUIRED",
+    "expect_error_field": "redirectUrl"
+  },
+  {
+    "id": "DD-E-002",
+    "name": "用不存在的变体建购物车（业务错误）",
+    "query": "CHECKOUT_CREATE",
+    "operation": "checkoutCreate",
+    "auth": true,
+    "variables": {
+      "input": {
+        "channel": "$CHANNEL",
+        "email": "buyer@example.com",
+        "lines": [{ "quantity": 1, "variantId": "UHJvZHVjdFZhcmlhbnQ6OTk5OTk5" }]
+      }
+    },
+    "level": "payload"
+  },
+  {
+    "id": "DD-E-003",
+    "name": "购物车填非法手机号（INVALID）",
+    "query": "CHECKOUT_SHIPPING_ADDRESS_UPDATE",
+    "operation": "checkoutShippingAddressUpdate",
+    "auth": true,
+    "variables": {
+      "id": "$CHECKOUT_ID",
+      "shippingAddress": {
+        "firstName": "San",
+        "lastName": "Zhang",
+        "streetAddress1": "123 Test Road",
+        "city": "New York",
+        "postalCode": "10001",
+        "country": "US",
+        "countryArea": "NY",
+        "phone": "+86215550000"
+      }
+    },
+    "level": "payload",
+    "expect_error_code": "INVALID",
+    "expect_error_field": "phone"
+  },
+  {
+    "id": "DD-E-004",
+    "name": "缺少必填 channel 参数（GraphQL 层错误）",
+    "query": "PRODUCTS",
+    "operation": "products",
+    "auth": true,
+    "variables": { "first": 5 },
+    "level": "graphql"
+  },
+  {
+    "id": "DD-E-005",
+    "name": "未授权访问订单列表（GraphQL 层错误）",
+    "query": "ORDERS",
+    "operation": "orders",
+    "auth": false,
+    "variables": { "first": 1 },
+    "level": "graphql"
+  },
+  {
+    "id": "DD-E-006",
+    "name": "查询不存在的商品（返回 null，无错误）",
+    "query": "PRODUCT_BY_ID",
+    "operation": "product",
+    "auth": true,
+    "variables": { "id": "UHJvZHVjdDoxMjM0NTY3ODk=", "channel": "$CHANNEL" },
+    "level": "none"
+  }
+]

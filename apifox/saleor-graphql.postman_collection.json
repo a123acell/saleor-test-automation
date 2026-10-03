@@ -1,0 +1,870 @@
+{
+  "info": {
+    "name": "Saleor GraphQL 接口测试集合",
+    "description": "Saleor 电商平台 GraphQL 接口集合，覆盖鉴权、商品、购物车、结算下单、订单、账户六大模块，共 19 个请求。\n\n导入方式：Apifox → 项目设置 → 导入数据 → Postman → 选择本文件。\n\n执行顺序：按文件夹编号执行「01 鉴权」→「02 商品」→「03 核心链路」，即可自动完成一次完整下单。\n\n变量说明（均由测试脚本自动写入，无需手工填）：\n- baseUrl：Saleor 地址，默认 http://localhost:8000\n- token / refreshToken：登录后写入\n- variantId：查询商品列表后写入\n- checkoutId / checkoutToken / checkoutTotal：创建购物车后写入，选配送方式后刷新\n- lineId / shippingMethodId：查询购物车详情后写入\n- orderId：完成下单后写入",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "variantId",
+      "value": ""
+    },
+    {
+      "key": "checkoutId",
+      "value": ""
+    },
+    {
+      "key": "checkoutToken",
+      "value": ""
+    },
+    {
+      "key": "checkoutTotal",
+      "value": ""
+    },
+    {
+      "key": "lineId",
+      "value": ""
+    },
+    {
+      "key": "shippingMethodId",
+      "value": ""
+    },
+    {
+      "key": "orderId",
+      "value": ""
+    },
+    {
+      "key": "registerEmail",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "01 鉴权",
+      "description": "登录获取 Token，后续所有请求自动携带。",
+      "item": [
+        {
+          "name": "01 登录获取 Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation TokenCreate($email: String!, $password: String!) {\n  tokenCreate(email: $email, password: $password) {\n    token\n    refreshToken\n    csrfToken\n    user { id email isStaff }\n    errors { field message code }\n  }\n}",
+                "variables": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"admin\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql",
+                ""
+              ]
+            },
+            "description": "获取管理员 Token，测试脚本会把 token / refreshToken 写入集合变量。"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var j = pm.response.json();",
+                  "var r = j.data && j.data.tokenCreate;",
+                  "pm.test('登录成功且无业务错误', function(){",
+                  "  pm.expect(r.errors, 'tokenCreate.errors').to.be.an('array').that.is.empty;",
+                  "});",
+                  "if (r && r.token) {",
+                  "  pm.collectionVariables.set('token', r.token);",
+                  "  if (r.refreshToken) { pm.collectionVariables.set('refreshToken', r.refreshToken); }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 刷新 Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation TokenRefresh($refreshToken: String!) {\n  tokenRefresh(refreshToken: $refreshToken) {\n    token\n    errors { field message code }\n  }\n}",
+                "variables": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql",
+                ""
+              ]
+            },
+            "description": "用 refreshToken 换取新的访问 Token。"
+          },
+          "response": []
+        },
+        {
+          "name": "03 校验 Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation TokenVerify($token: String!) {\n  tokenVerify(token: $token) {\n    isValid\n    payload\n    errors { field message code }\n  }\n}",
+                "variables": "{\n  \"token\": \"{{token}}\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql",
+                ""
+              ]
+            },
+            "description": "校验 Token 有效性，返回 isValid 与 payload。"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 商品",
+      "description": "渠道、商品列表与商品详情查询。",
+      "item": [
+        {
+          "name": "04 渠道列表",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Channels {\n  channels {\n    id\n    slug\n    name\n    currencyCode\n    isActive\n    defaultCountry { code country }\n  }\n}",
+                "variables": "{}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql",
+                ""
+              ]
+            },
+            "description": "查询全部销售渠道，下单时必须指定渠道 slug。"
+          },
+          "response": []
+        },
+        {
+          "name": "05 商品列表（分页）",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Products($channel: String!, $first: Int!) {\n  products(first: $first, channel: $channel) {\n    totalCount\n    edges {\n      node {\n        id\n        name\n        slug\n        productType { name }\n        variants {\n          id\n          name\n          sku\n          pricing { price { gross { amount currency } } }\n        }\n      }\n    }\n  }\n}",
+                "variables": "{\n  \"channel\": \"default-channel\",\n  \"first\": 5\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql",
+                ""
+              ]
+            },
+            "description": "分页查询渠道下商品及变体、价格。测试脚本会写入 variantId。"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var j = pm.response.json();",
+                  "var edges = j.data.products.edges;",
+                  "pm.test('商品列表非空', function(){ pm.expect(edges.length).to.be.above(0); });",
+                  "if (edges.length && edges[0].node.variants.length) {",
+                  "  pm.collectionVariables.set('variantId', edges[0].node.variants[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 商品详情（按 slug）",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query ProductDetail($slug: String!, $channel: String!) {\n  product(slug: $slug, channel: $channel) {\n    id\n    name\n    slug\n    description\n    pricing { priceRange { start { gross { amount currency } } } }\n    variants { id name sku quantityAvailable }\n  }\n}",
+                "variables": "{\n  \"slug\": \"apple-juice\",\n  \"channel\": \"default-channel\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql",
+                ""
+              ]
+            },
+            "description": "按 slug 查询单个商品详情。slug 可在「05 商品列表」响应中获取。"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 核心链路 · 购物车到下单",
+      "description": "按顺序执行即可完成一次完整下单。金额变量 checkoutTotal 会自动跟随购物车变化。",
+      "item": [
+        {
+          "name": "07 创建购物车（加购）",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation CheckoutCreate($input: CheckoutCreateInput!) {\n  checkoutCreate(input: $input) {\n    checkout {\n      id\n      token\n      email\n      totalPrice { gross { amount currency } }\n      lines { id quantity variant { id name } }\n    }\n    errors { field message code }\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"channel\": \"default-channel\",\n    \"email\": \"buyer@example.com\",\n    \"lines\": [\n      {\n        \"quantity\": 1,\n        \"variantId\": \"{{variantId}}\"\n      }\n    ]\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql",
+                ""
+              ]
+            },
+            "description": "创建购物车并加入商品。测试脚本写入 checkoutId / checkoutToken / checkoutTotal。"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var j = pm.response.json();",
+                  "var r = j.data.checkoutCreate;",
+                  "pm.test('创建购物车无业务错误', function(){",
+                  "  pm.expect(r.errors, 'checkoutCreate.errors').to.be.an('array').that.is.empty;",
+                  "});",
+                  "if (r.checkout) {",
+                  "  pm.collectionVariables.set('checkoutId', r.checkout.id);",
+                  "  pm.collectionVariables.set('checkoutToken', r.checkout.token);",
+                  "  pm.collectionVariables.set('checkoutTotal', r.checkout.totalPrice.gross.amount);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08 填写收货地址",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation CheckoutShippingAddressUpdate($id: ID!, $shippingAddress: AddressInput!) {\n  checkoutShippingAddressUpdate(id: $id, shippingAddress: $shippingAddress) {\n    checkout {\n      id\n      shippingAddress { firstName lastName streetAddress1 city postalCode country { code } }\n    }\n    errors { field message code }\n  }\n}",
+                "variables": "{\n  \"id\": \"{{checkoutId}}\",\n  \"shippingAddress\": {\n    \"firstName\": \"San\",\n    \"lastName\": \"Zhang\",\n    \"streetAddress1\": \"123 Test Road\",\n    \"city\": \"New York\",\n    \"postalCode\": \"10001\",\n    \"country\": \"US\",\n    \"countryArea\": \"NY\",\n    \"phone\": \"+12125550000\"\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql",
+                ""
+              ]
+            },
+            "description": "填写收货地址。注意：部分国家（如 CN）会校验 city / countryArea 合法性，不通过时返回 INVALID。"
+          },
+          "response": []
+        },
+        {
+          "name": "09 填写账单地址",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation CheckoutBillingAddressUpdate($id: ID!, $billingAddress: AddressInput!) {\n  checkoutBillingAddressUpdate(id: $id, billingAddress: $billingAddress) {\n    checkout { id billingAddress { city country { code } } }\n    errors { field message code }\n  }\n}",
+                "variables": "{\n  \"id\": \"{{checkoutId}}\",\n  \"billingAddress\": {\n    \"firstName\": \"San\",\n    \"lastName\": \"Zhang\",\n    \"streetAddress1\": \"123 Test Road\",\n    \"city\": \"New York\",\n    \"postalCode\": \"10001\",\n    \"country\": \"US\",\n    \"countryArea\": \"NY\",\n    \"phone\": \"+12125550000\"\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql",
+                ""
+              ]
+            },
+            "description": "填写账单地址。Saleor 要求下单前账单地址非空，否则返回 BILLING_ADDRESS_NOT_SET。"
+          },
+          "response": []
+        },
+        {
+          "name": "10 查询购物车详情（取配送方式）",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query CheckoutDetail($id: ID!) {\n  checkout(id: $id) {\n    id\n    email\n    totalPrice { gross { amount currency } }\n    subtotalPrice { gross { amount currency } }\n    lines { id quantity variant { id name } }\n    availableShippingMethods { id name price { amount currency } }\n    availablePaymentGateways { id name }\n  }\n}",
+                "variables": "{\n  \"id\": \"{{checkoutId}}\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql",
+                ""
+              ]
+            },
+            "description": "查询购物车明细、可用配送方式与支付网关。必须先填收货地址，否则 availableShippingMethods 为空。测试脚本写入 lineId / shippingMethodId / checkoutTotal。"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var j = pm.response.json();",
+                  "var c = j.data.checkout;",
+                  "pm.test('购物车存在', function(){ pm.expect(c).to.not.be.null; });",
+                  "if (c) {",
+                  "  pm.collectionVariables.set('checkoutTotal', c.totalPrice.gross.amount);",
+                  "  if (c.lines.length) { pm.collectionVariables.set('lineId', c.lines[0].id); }",
+                  "  if (c.availableShippingMethods.length) {",
+                  "    pm.collectionVariables.set('shippingMethodId', c.availableShippingMethods[0].id);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11 选择配送方式",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation CheckoutDeliveryMethodUpdate($id: ID!, $deliveryMethodId: ID!) {\n  checkoutDeliveryMethodUpdate(id: $id, deliveryMethodId: $deliveryMethodId) {\n    checkout {\n      id\n      shippingMethod { id name }\n      totalPrice { gross { amount currency } }\n    }\n    errors { field message code }\n  }\n}",
+                "variables": "{\n  \"id\": \"{{checkoutId}}\",\n  \"deliveryMethodId\": \"{{shippingMethodId}}\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql",
+                ""
+              ]
+            },
+            "description": "选择配送方式。shippingMethodId 由「08 查询购物车详情」自动写入。运费会计入总额，测试脚本会刷新 checkoutTotal。"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var j = pm.response.json();",
+                  "var r = j.data.checkoutDeliveryMethodUpdate;",
+                  "pm.test('选择配送方式无业务错误', function(){",
+                  "  pm.expect(r.errors, 'checkoutDeliveryMethodUpdate.errors').to.be.an('array').that.is.empty;",
+                  "});",
+                  "if (r.checkout) { pm.collectionVariables.set('checkoutTotal', r.checkout.totalPrice.gross.amount); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12 创建支付",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation CheckoutPaymentCreate($id: ID!, $input: PaymentInput!) {\n  checkoutPaymentCreate(id: $id, input: $input) {\n    payment { id total { amount currency } }\n    errors { field message code }\n  }\n}",
+                "variables": "{\n  \"id\": \"{{checkoutId}}\",\n  \"input\": {\n    \"gateway\": \"mirumee.payments.dummy\",\n    \"amount\": \"{{checkoutTotal}}\",\n    \"token\": \"charged\"\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql",
+                ""
+              ]
+            },
+            "description": "创建支付。Dummy 网关 token 可取 charged（成功）/ refused（拒绝）/ pending（待处理），用于模拟支付结果。"
+          },
+          "response": []
+        },
+        {
+          "name": "13 完成下单",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation CheckoutComplete($id: ID!) {\n  checkoutComplete(id: $id) {\n    order { id number status total { gross { amount currency } } }\n    confirmationNeeded\n    confirmationData\n    errors { field message code }\n  }\n}",
+                "variables": "{\n  \"id\": \"{{checkoutId}}\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql",
+                ""
+              ]
+            },
+            "description": "完成下单。测试脚本写入 orderId。"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var j = pm.response.json();",
+                  "var r = j.data.checkoutComplete;",
+                  "pm.test('下单无业务错误', function(){",
+                  "  pm.expect(r.errors, 'checkoutComplete.errors').to.be.an('array').that.is.empty;",
+                  "});",
+                  "if (r.order) { pm.collectionVariables.set('orderId', r.order.id); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 订单",
+      "description": "订单查询（需管理员 Token）。",
+      "item": [
+        {
+          "name": "14 订单列表",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Orders($first: Int!) {\n  orders(first: $first) {\n    totalCount\n    edges { node { id number status created total { gross { amount currency } } } }\n  }\n}",
+                "variables": "{\n  \"first\": 10\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql",
+                ""
+              ]
+            },
+            "description": "分页查询订单列表。"
+          },
+          "response": []
+        },
+        {
+          "name": "15 订单详情",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query OrderDetail($id: ID!) {\n  order(id: $id) {\n    id\n    number\n    status\n    created\n    userEmail\n    total { gross { amount currency } }\n    lines { id productName quantity }\n  }\n}",
+                "variables": "{\n  \"id\": \"{{orderId}}\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql",
+                ""
+              ]
+            },
+            "description": "按 ID 查询订单详情。orderId 由「13 完成下单」自动写入。"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "05 账户",
+      "description": "用户注册与当前用户信息。",
+      "item": [
+        {
+          "name": "16 当前用户信息",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Me {\n  me {\n    id\n    email\n    firstName\n    lastName\n    isStaff\n    isActive\n  }\n}",
+                "variables": "{}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql",
+                ""
+              ]
+            },
+            "description": "查询当前 Token 对应的用户信息。"
+          },
+          "response": []
+        },
+        {
+          "name": "17 账户注册",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation AccountRegister($input: AccountRegisterInput!) {\n  accountRegister(input: $input) {\n    user { id email isActive }\n    errors { field message code }\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"email\": \"{{registerEmail}}\",\n    \"password\": \"Passw0rd!2026\",\n    \"channel\": \"default-channel\",\n    \"redirectUrl\": \"http://localhost:3000/confirm\"\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql",
+                ""
+              ]
+            },
+            "description": "注册新用户。Saleor 要求提供 redirectUrl（用于拼接邮箱确认链接），缺失会返回 REQUIRED。默认需邮箱确认后才激活，确认邮件可在 Mailpit（http://localhost:8025）查看。预请求脚本会生成随机邮箱，保证可重复执行。"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('registerEmail', 'autotest_' + Date.now() + '@example.com');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 购物车扩展操作",
+      "description": "会改变购物车状态，建议在新建的购物车上单独验证，不要插在核心链路中间执行。",
+      "item": [
+        {
+          "name": "18 修改商品数量",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation CheckoutLinesUpdate($id: ID!, $lines: [CheckoutLineUpdateInput!]!) {\n  checkoutLinesUpdate(id: $id, lines: $lines) {\n    checkout { id totalPrice { gross { amount currency } } lines { id quantity } }\n    errors { field message code }\n  }\n}",
+                "variables": "{\n  \"id\": \"{{checkoutId}}\",\n  \"lines\": [\n    {\n      \"lineId\": \"{{lineId}}\",\n      \"quantity\": 2\n    }\n  ]\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql",
+                ""
+              ]
+            },
+            "description": "修改购物车某行数量。lineId 由「08 查询购物车详情」自动写入。"
+          },
+          "response": []
+        },
+        {
+          "name": "19 删除商品",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation CheckoutLinesDelete($id: ID!, $linesIds: [ID!]!) {\n  checkoutLinesDelete(id: $id, linesIds: $linesIds) {\n    checkout { id totalPrice { gross { amount currency } } }\n    errors { field message code }\n  }\n}",
+                "variables": "{\n  \"id\": \"{{checkoutId}}\",\n  \"linesIds\": [\n    \"{{lineId}}\"\n  ]\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql",
+                ""
+              ]
+            },
+            "description": "删除购物车中的商品行。"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
